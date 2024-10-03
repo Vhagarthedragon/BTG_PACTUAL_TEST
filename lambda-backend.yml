@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Despliegue de FastAPI en AWS Lambda usando imágenes Docker
+
+Resources:
+  FastAPILambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties: 
+      FunctionName: FastAPI-Docker-Lambda
+      PackageType: Image  # Esto indica que usarás una imagen Docker
+      Code:
+        ImageUri: your-account-id.dkr.ecr.your-region.amazonaws.com/fastapi-lambda-repo:latest  # URI de la imagen en ECR
+      Role: !GetAtt FastAPILambdaExecutionRole.Arn  # Rol que tiene permisos para ejecutar la función Lambda
+      MemorySize: 512
+      Timeout: 30  # Tiempo máximo de ejecución de la función en segundos
+
+  FastAPILambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaBasicExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+
+  FastAPIApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: FastAPI-Docker-Gateway
+
+  FastAPIApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt FastAPIApiGateway.RootResourceId
+      PathPart: "{proxy+}"
+      RestApiId: !Ref FastAPIApiGateway
+
+  FastAPIApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: ANY
+      ResourceId: !Ref FastAPIApiGatewayResource
+      RestApiId: !Ref FastAPIApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FastAPILambdaFunction.Arn}/invocations
+          - FastAPILambdaFunction: !GetAtt FastAPILambdaFunction.Arn
+
+  LambdaPermissionApiGateway:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt FastAPILambdaFunction.Arn
+      Principal: apigateway.amazonaws.com
