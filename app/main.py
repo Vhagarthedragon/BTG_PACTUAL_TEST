@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import boto3
 from fastapi.middleware.cors import CORSMiddleware
 from app.apis import cliente_api, transaccion_api, sucursal_api, disponibilidad_api, producto_api
-from mangum import Mangum
 
 app = FastAPI()
 
@@ -25,7 +24,7 @@ session = boto3.Session(
 # Configura CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Cambia esto según tu entorno
+    allow_origins=["*"],  # Cambia esto según tu entorno
     allow_credentials=True,
     allow_methods=["*"],  # Permitir todos los métodos
     allow_headers=["*"],  # Permitir todos los encabezados
@@ -43,5 +42,4 @@ app.include_router(producto_api.router, prefix="/productos", tags=["Productos"])
 def read_root():
     return {"message": "Bienvenido a la API de Gestión de Sucursales y Productos"}
 
-handler = Mangum(app)
 

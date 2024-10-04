@@ -15,3 +15,8 @@ class TransaccionResponse(BaseModel):
     monto: int
     tipo: str
     fecha: datetime
+    
+# Modelo para recibir datos de la solicitud de cancelación
+class CancelarTransaccionRequest(BaseModel):
+    id: str
+    cliente_id: str

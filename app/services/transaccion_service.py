@@ -6,6 +6,7 @@ from datetime import datetime
 from botocore.exceptions import ClientError
 from decimal import Decimal 
 from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr
 
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 transacciones_table = dynamodb.Table('Transacciones')
@@ -35,11 +36,12 @@ async def registrar_transaccion(cliente_id: str, producto_id: str, tipo: str, mo
     cliente_saldo_decimal = Decimal(cliente['saldo'])  # Convierte el saldo del cliente a Decimal
     producto_monto_minimo = Decimal(producto['monto_minimo'])  # Convierte el monto mínimo del producto a Decimal
 
-    if producto_monto_minimo > cliente_saldo_decimal:
-        raise HTTPException(status_code=400, detail=f"El monto mínimo para el producto {producto['nombre']} es mayor al saldo disponible.")
 
     # Verifica si el cliente tiene saldo suficiente para realizar la transacción
     monto_decimal = Decimal(monto)  # Convertir el monto a Decimal
+
+    if producto_monto_minimo > monto_decimal:
+        raise HTTPException(status_code=400, detail=f"El monto mínimo para afiliarse a {producto['nombre']} es de: {producto['monto_minimo']}")
 
     if cliente_saldo_decimal < monto_decimal:
         raise HTTPException(status_code=400, detail="Saldo insuficiente para realizar la transacción")
@@ -72,10 +74,59 @@ async def registrar_transaccion(cliente_id: str, producto_id: str, tipo: str, mo
 
     return transaccion  # Devuelve la transacción para confirmación
 
+async def cancelar_transaccion_servicio(transaccion_id: str, cliente_id: str):
+    # Obtener la transacción para asegurarnos de que existe
+    try:
+
+        transaccion_response = transacciones_table.get_item(Key={
+            'id': transaccion_id       # Clave de clasificación
+        })
+
+
+        transaccion = transaccion_response.get('Item')
+        
+        if not transaccion:
+            raise HTTPException(status_code=404, detail="Transacción no encontrada")
+
+        # Obtener el cliente para actualizar su saldo
+        cliente_response = clientes_table.get_item(Key={'id': cliente_id})
+        cliente = cliente_response.get('Item')
+        
+        if not cliente:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+        # Actualizar el saldo del cliente sumando el monto de la transacción cancelada
+        monto_transaccion = Decimal(transaccion['monto'])  # Convertir monto a Decimal
+        nuevo_saldo = Decimal(cliente['saldo']) + monto_transaccion
+        
+        # Actualizar la transacción para marcarla como "afiliacion cancelada"
+        transacciones_table.update_item(
+            Key={
+               
+                'id': transaccion_id       # Clave de clasificación
+            },
+            UpdateExpression='SET #tipo = :tipo',
+            ExpressionAttributeNames={'#tipo': 'tipo'},
+            ExpressionAttributeValues={':tipo': 'afiliacion cancelada'}
+        )
+
+        # Actualizar el saldo del cliente en la tabla de Clientes
+        clientes_table.update_item(
+            Key={'id': cliente_id},
+            UpdateExpression='SET saldo = :nuevo_saldo',
+            ExpressionAttributeValues={':nuevo_saldo': str(nuevo_saldo)}  # Convertir a string si es necesario
+        )
+
+        return {"message": "Transacción cancelada y saldo del cliente actualizado"}
+
+    except ClientError as e:
+        raise HTTPException(status_code=500, detail=f"Error al cancelar transacción: {e.response['Error']['Message']}")
+
+
 async def get_transacciones(cliente_id: str):
     try:
-        response = transacciones_table.query(
-            KeyConditionExpression=Key('cliente_id').eq(cliente_id)
+        response = transacciones_table.scan(
+        FilterExpression=Attr('cliente_id').eq(cliente_id)
         )
         return response.get('Items', [])
     except ClientError as e:

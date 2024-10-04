@@ -1,4 +1,4 @@
-# Proyecto de API con FastAPI
+# Proyecto de API con FastAPI, Prueba Tecnica BTG PACTUAL
 
 Este proyecto es una API desarrollada con FastAPI que utiliza Pydantic para la validación de datos, Boto3 para la interacción con AWS, y Docker para la contenedorización. También incluye un archivo YAML de CloudFormation para facilitar el despliegue en AWS.
 

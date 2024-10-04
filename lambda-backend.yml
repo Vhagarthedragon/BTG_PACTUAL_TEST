@@ -1,69 +1,58 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Despliegue de FastAPI en AWS Lambda usando imágenes Docker
+Description: CloudFormation template to deploy FastAPI on ECS
+
+Parameters:
+  ECRImageURI:
+    Type: String
+    Description: URI of the Docker image in ECR
+  VpcId:
+    Type: String
+    Description: VPC ID where ECS will run
+  SubnetId:
+    Type: String
+    Description: Subnet ID for the ECS tasks
+  SecurityGroup:
+    Type: String
+    Description: Security Group for the ECS tasks
 
 Resources:
-  FastAPILambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties: 
-      FunctionName: FastAPI-Docker-Lambda
-      PackageType: Image  # Esto indica que usarás una imagen Docker
-      Code:
-        ImageUri: your-account-id.dkr.ecr.your-region.amazonaws.com/fastapi-lambda-repo:latest  # URI de la imagen en ECR
-      Role: !GetAtt FastAPILambdaExecutionRole.Arn  # Rol que tiene permisos para ejecutar la función Lambda
-      MemorySize: 512
-      Timeout: 30  # Tiempo máximo de ejecución de la función en segundos
-
-  FastAPILambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties: 
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: LambdaBasicExecution
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: arn:aws:logs:*:*:*
-
-  FastAPIApiGateway:
-    Type: AWS::ApiGateway::RestApi
+  FastAPICluster:
+    Type: AWS::ECS::Cluster
     Properties:
-      Name: FastAPI-Docker-Gateway
+      ClusterName: FastAPICluster
 
-  FastAPIApiGatewayResource:
-    Type: AWS::ApiGateway::Resource
+  FastAPITaskDefinition:
+    Type: AWS::ECS::TaskDefinition
     Properties:
-      ParentId: !GetAtt FastAPIApiGateway.RootResourceId
-      PathPart: "{proxy+}"
-      RestApiId: !Ref FastAPIApiGateway
+      Family: FastAPITask
+      NetworkMode: awsvpc
+      ContainerDefinitions:
+        - Name: fastapi-container
+          Image: !Ref ECRImageURI
+          Memory: 512
+          Cpu: 256
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+              HostPort: 8000
+              Protocol: tcp
 
-  FastAPIApiGatewayMethod:
-    Type: AWS::ApiGateway::Method
+  FastAPIService:
+    Type: AWS::ECS::Service
     Properties:
-      AuthorizationType: NONE
-      HttpMethod: ANY
-      ResourceId: !Ref FastAPIApiGatewayResource
-      RestApiId: !Ref FastAPIApiGateway
-      Integration:
-        IntegrationHttpMethod: POST
-        Type: AWS_PROXY
-        Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FastAPILambdaFunction.Arn}/invocations
-          - FastAPILambdaFunction: !GetAtt FastAPILambdaFunction.Arn
+      Cluster: !Ref FastAPICluster
+      TaskDefinition: !Ref FastAPITaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref SubnetId
+          SecurityGroups:
+            - !Ref SecurityGroup
+          AssignPublicIp: ENABLED
 
-  LambdaPermissionApiGateway:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt FastAPILambdaFunction.Arn
-      Principal: apigateway.amazonaws.com
+Outputs:
+  ServiceUrl:
+    Description: "URL of the FastAPI service"
+    Value: !Sub "http://${FastAPIService}.loadBalancer.dnsName"

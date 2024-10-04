@@ -18,7 +18,7 @@ COPY . .
 # Copia el archivo .env
 COPY .env .env
 # Exponer puerto 8000 para pruebas locales
-EXPOSE 8000
+EXPOSE 80
 
 # Comando para iniciar FastAPI con Mangum (adaptado para Lambda)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
