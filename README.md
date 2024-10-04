@@ -2,6 +2,10 @@
 
 Este proyecto es una API desarrollada con FastAPI que utiliza Pydantic para la validación de datos, Boto3 para la interacción con AWS, y Docker para la contenedorización. También incluye un archivo YAML de CloudFormation para facilitar el despliegue en AWS.
 
+LINK DEL FRONTEND http://btg-bucket.s3-website-us-east-1.amazonaws.com/
+
+LINK DEL BACKEND http://18.235.234.197
+
 ## Características
 
 - **Framework**: FastAPI
